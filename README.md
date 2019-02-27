@@ -1,1 +1,1 @@
-# WebSockestClient
+# WebSocketClient
