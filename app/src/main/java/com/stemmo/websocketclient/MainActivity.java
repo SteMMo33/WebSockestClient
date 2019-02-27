@@ -42,6 +42,20 @@ public class MainActivity extends Activity {
                 connectWebSocket();
             }
         });
+
+        btnDisconnect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mWebSocketClient.close();
+            }
+        });
+
+        btnSend.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mWebSocketClient.send("Ciao");
+            }
+        });
     }
 
 
