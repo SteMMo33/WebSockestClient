@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import org.java_websocket.client.WebSocketClient;
@@ -23,6 +24,7 @@ public class MainActivity extends Activity {
     private WebSocketClient mWebSocketClient;
     private TextView tvStatus;
     private TextView tvMessages;
+    private EditText edtServer;
 
 
     @Override
@@ -35,6 +37,7 @@ public class MainActivity extends Activity {
         Button btnSend = findViewById(R.id.btnSend);
         tvStatus = findViewById(R.id.tvStatus);
         tvMessages = findViewById(R.id.tvMessages);
+        edtServer = findViewById(R.id.edtServer);
 
         btnConnect.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -56,14 +59,20 @@ public class MainActivity extends Activity {
                 mWebSocketClient.send("Ciao");
             }
         });
+
+        edtServer.setText("192.168.5.69");
     }
 
 
 
     private void connectWebSocket() {
+
+        String ip = edtServer.getText().toString();
+        tvMessages.setText("Connecting to " + ip + "\n");
+
         URI uri;
         try {
-            uri = new URI("ws://websockethost:8080");
+            uri = new URI("ws://"+ip);
         } catch (URISyntaxException e) {
             e.printStackTrace();
             return;
@@ -100,6 +109,8 @@ public class MainActivity extends Activity {
             @Override
             public void onError(Exception e) {
                 Log.i("Websocket", "Error " + e.getMessage());
+                tvMessages.setText(e.getMessage());
+                tvStatus.setText("Status: Error");
             }
         };
         mWebSocketClient.connect();
