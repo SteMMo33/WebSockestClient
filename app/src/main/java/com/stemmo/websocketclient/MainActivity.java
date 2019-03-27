@@ -18,6 +18,7 @@ import java.net.URISyntaxException;
 /**
  * Applicativo per collegare un server websocket e generare una notifica.
  *
+ * Aggiunto     implementation "org.java-websocket:Java-WebSocket:1.3.0" nel file app\build.gradle
  */
 public class MainActivity extends Activity {
 
@@ -25,6 +26,9 @@ public class MainActivity extends Activity {
     private TextView tvStatus;
     private TextView tvMessages;
     private EditText edtServer;
+    Button btnConnect;
+    Button btnDisconnect;
+    Button btnSend;
 
 
     @Override
@@ -32,9 +36,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button btnConnect = findViewById(R.id.btnConnect);
-        Button btnDisconnect = findViewById(R.id.btnDisconnect);
-        Button btnSend = findViewById(R.id.btnSend);
+        btnConnect = findViewById(R.id.btnConnect);
+        btnDisconnect = findViewById(R.id.btnDisconnect);
+        btnSend = findViewById(R.id.btnSend);
         tvStatus = findViewById(R.id.tvStatus);
         tvMessages = findViewById(R.id.tvMessages);
         edtServer = findViewById(R.id.edtServer);
@@ -52,15 +56,18 @@ public class MainActivity extends Activity {
                 mWebSocketClient.close();
             }
         });
+        btnDisconnect.setEnabled(false);
 
         btnSend.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mWebSocketClient.send("Ciao");
+                mWebSocketClient.send("firmware");
             }
         });
+        btnSend.setEnabled(false);
 
         edtServer.setText("192.168.5.69");
+        tvMessages.setText("");
     }
 
 
@@ -68,7 +75,7 @@ public class MainActivity extends Activity {
     private void connectWebSocket() {
 
         String ip = edtServer.getText().toString();
-        tvMessages.setText("Connecting to " + ip + "\n");
+        tvMessages.setText("Connecting to " + ip + "..\n");
 
         URI uri;
         try {
@@ -81,6 +88,10 @@ public class MainActivity extends Activity {
         mWebSocketClient = new WebSocketClient(uri) {
             @Override
             public void onOpen(ServerHandshake serverHandshake) {
+
+                btnConnect.setEnabled(false);
+                btnDisconnect.setEnabled(true);
+                btnSend.setEnabled(true);
 
                 tvStatus.setText("Status: Connected");
 
@@ -102,15 +113,33 @@ public class MainActivity extends Activity {
 
             @Override
             public void onClose(int i, String s, boolean b) {
-                tvStatus.setText("Status: Disconnected");
-                Log.i("Websocket", "Closed " + s);
+                Log.i("Websocket", "Closed: " + s);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        tvStatus.setText("Status: Disconnected");
+                        btnConnect.setEnabled(true);
+                        btnDisconnect.setEnabled(false);
+                        btnSend.setEnabled(false);
+                    }
+                });
             }
 
             @Override
             public void onError(Exception e) {
-                Log.i("Websocket", "Error " + e.getMessage());
-                tvMessages.setText(e.getMessage());
-                tvStatus.setText("Status: Error");
+                Log.e("Websocket", "Error: " + e.getMessage());
+                final Exception ex = e;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        tvMessages.setText(tvMessages.getText() + ex.getMessage());
+                        tvStatus.setText("Status: Error");
+
+                        btnConnect.setEnabled(true);
+                        btnDisconnect.setEnabled(false);
+                        btnSend.setEnabled(false);
+                    }
+                });
             }
         };
         mWebSocketClient.connect();
