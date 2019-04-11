@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Websocket client</string>
+    <string name="title_activity_notification_receiver">NotificationReceiver</string>
 </resources>
