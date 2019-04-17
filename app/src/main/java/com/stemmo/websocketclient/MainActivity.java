@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -15,12 +16,17 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.drafts.Draft_6455;
+import org.java_websocket.extensions.IExtension;
 import org.java_websocket.handshake.ServerHandshake;
+import org.java_websocket.protocols.IProtocol;
+import org.java_websocket.protocols.Protocol;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collections;
 
 /**
  * Applicativo per collegare un server websocket, gestire una risposta JSON e generare una notifica.
@@ -32,13 +38,17 @@ import java.net.URISyntaxException;
  * Notifiche: https://developer.android.com/guide/topics/ui/notifiers/notifications.html
  * https://www.androidauthority.com/how-to-create-android-notifications-707254/
  *
+ * Per gestire l'action sulla Snackbar è stato necessario implementare la OnClickListener nell'activity
+ * e definire il metodo corrispondente onClick
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements View.OnClickListener {
+
+    final String APP_TAG = "WebsocketClient";
 
     private WebSocketClient mWebSocketClient;
     private TextView tvStatus;
     private TextView tvMessages;
-    private EditText edtServer;
+    private EditText edtServer, edtPort, edtCmdToSend;
     Button btnConnect;
     Button btnDisconnect;
     Button btnSend;
@@ -55,12 +65,14 @@ public class MainActivity extends Activity {
         btnSend = findViewById(R.id.btnSend);
         tvStatus = findViewById(R.id.tvStatus);
         tvMessages = findViewById(R.id.tvMessages);
+
         edtServer = findViewById(R.id.edtServer);
+        edtPort = findViewById(R.id.edtPort);
 
         btnConnect.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                    connectWebSocket();
+                connectWebSocket(this);
             }
         });
 
@@ -75,7 +87,15 @@ public class MainActivity extends Activity {
         btnSend.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mWebSocketClient.send("firmware");
+                EditText edt = findViewById(R.id.edtCommand);
+                String cmd = edt.getText().toString();
+                if (cmd.isEmpty()) {
+                    AddToLog("Comando vuoto\n");
+                    return;
+                }
+                // Invio
+                AddToLog("Sending cmd: "+cmd+ "\n");
+                mWebSocketClient.send(cmd);
             }
         });
         btnSend.setEnabled(false);
@@ -90,22 +110,50 @@ public class MainActivity extends Activity {
         tvMessages.setText(tvMessages.getText() + msg);
     }
 
-    private void connectWebSocket() {
+    /**
+     * Connessione al websocket
+     */
+    private void connectWebSocket(View.OnClickListener view) {
 
+        // Controllo porta
+        String port = edtPort.getText().toString();
+        if (port.isEmpty()){
+            /* Snackbar.make( thisView, "Port di default", Snackbar.LENGTH_LONG)
+                    .setAction("Modifica", view)
+                    .show(); */
+        }
+
+        // Controllo indirizzo IP
         String ip = edtServer.getText().toString();
-        tvMessages.setText("Connecting to " + ip + "..\n");
+        tvMessages.setText("Connecting to " + ip + " port:"+ port + "..\n");
 
         URI uri;
+        String url = "ws://"+ip;
+        if (!port.isEmpty()) url += ":"+port;
+
         try {
-            uri = new URI("ws://"+ip+":7681");
+            uri = new URI(url);
         } catch (URISyntaxException e) {
             e.printStackTrace();
             AddToLog(e.getMessage());
             return;
         }
 
+        //NOTE Importante per selezionare il protocollo del server ws-server
+        Draft_6455 draft = new Draft_6455(
+                Collections.<IExtension>emptyList(),
+                Collections.<IProtocol>singletonList(new Protocol("lws-minimal")));
+
+        /*
+        // This draft allows the specific Sec-WebSocket-Protocol and also provides a fallback, if the other endpoint does not accept the specific Sec-WebSocket-Protocol
+        ArrayList<IProtocol> protocols = new ArrayList<IProtocol>();
+        protocols.add(new Protocol("ocpp2.0"));
+        protocols.add(new Protocol(""));
+        Draft_6455 draft_ocppAndFallBack = new Draft_6455(Collections.<IExtension>emptyList(), protocols);
+        */
+
         // Creazione del websocket e definizione delle relative callbacks
-        mWebSocketClient = new WebSocketClient(uri) {
+        mWebSocketClient = new WebSocketClient(uri, draft) {
 
             /**
              * Callback su apertura connessione
@@ -114,6 +162,8 @@ public class MainActivity extends Activity {
             @Override
             public void onOpen(ServerHandshake serverHandshake) {
 
+                Log.i( APP_TAG, "ServerStsMsg: " + serverHandshake.getHttpStatusMessage());
+
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -121,11 +171,10 @@ public class MainActivity extends Activity {
                         btnDisconnect.setEnabled(true);
                         btnSend.setEnabled(true);
 
+                        AddToLog("Opened!\n");
+                        tvStatus.setText("Status: Opened");
 
-                        AddToLog("Connected!\n");
-                        tvStatus.setText("Status: Connected");
-
-                        Log.i("Websocket", "Opened");
+                        Log.i(APP_TAG, "Opened");
                         mWebSocketClient.send("Hello from " + Build.MANUFACTURER + " " + Build.MODEL);
                     }
                 });
@@ -141,8 +190,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        TextView textView = (TextView)findViewById(R.id.tvMessages);
-                        textView.setText(textView.getText() + "\n" + message);
+                        AddToLog(message);
 
                         // Instantiate a JSON object from the request response
                         try {
@@ -165,12 +213,12 @@ public class MainActivity extends Activity {
              */
             @Override
             public void onClose(int i, String s, boolean b) {
-                Log.i("Websocket", "Closed: " + s);
+                Log.i(APP_TAG, "Closed Code:" + i + " - Desc: " + s);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        tvStatus.setText("Status: Disconnected");
-                        AddToLog(".. disconnected");
+                        tvStatus.setText("Status: Closed");
+                        AddToLog(".. closed");
 
                         btnConnect.setEnabled(true);
                         btnDisconnect.setEnabled(false);
@@ -181,7 +229,8 @@ public class MainActivity extends Activity {
 
             @Override
             public void onError(Exception e) {
-                Log.e("Websocket", "Error: " + e.getMessage());
+                Log.e(APP_TAG, "Error: " + e.getMessage());
+
                 final Exception ex = e;
                 runOnUiThread(new Runnable() {
                     @Override
@@ -236,6 +285,15 @@ public class MainActivity extends Activity {
         // rather than create a new one. In this example, the notification’s ID is 001//
         // NotificationManager.notify().
         mNotificationManager.notify(001, n);
+    }
+
+    /**
+     * Gestore click nella snackbar
+     * @param view
+     */
+    @Override
+    public void onClick(View view) {
+        Log.i( APP_TAG, "onClick");
     }
 
 }
